@@ -20,7 +20,6 @@ const twitterClient = new TwitterApi({
 });
 
 const callBackURL = "https://us-central1-twitterbot-643de.cloudfunctions.net/callback";
-const tweetLengths = [32, 48, 64];
 export const auth = functions.https.onRequest(async (req, res) => {
   const {url, state, codeVerifier} = twitterClient.generateOAuth2AuthLink(callBackURL, {
     scope: ["tweet.read", "tweet.write", "users.read", "offline.access"],
@@ -57,19 +56,13 @@ export const tweet = functions.https.onRequest(async (req, res) => {
   await db.set({accessToken, refreshToken: newRefreshToken});
 
   const nextTweet = await openai.createCompletion("text-davinci-001", {
-    prompt: OPENAI_PROMPTS[Math.floor(Math.random() * OPENAI_PROMPTS.length)],
-    max_tokens: tweetLengths[Math.floor(Math.random() * tweetLengths.length)],
+    prompt: `Generate a tweet with hashtags of 128 characters about ${OPENAI_PROMPTS[Math.floor(Math.random() * OPENAI_PROMPTS.length)]}`,
+    max_tokens: 128,
   });
   const textTweet = nextTweet.data.choices && nextTweet.data.choices[0].text || "";
 
-  const hashtags = await openai.createCompletion("text-davinci-001", {
-    prompt: `Generate Hastags for the following: \n ${textTweet}`,
-    max_tokens: 64,
-  });
-  const hashtagsTweet = hashtags.data.choices && hashtags.data.choices[0].text || "";
-
   refreshedClient.v2.tweet(
-      `${textTweet} ${hashtagsTweet}`
+      textTweet
   ).then((data) => res.send(data.data)).catch((err) => res.send(JSON.stringify(err)));
 });
 
@@ -84,16 +77,11 @@ export const scheduledFunction = functions.pubsub.schedule("0 */6 * * *").onRun(
 
   await db.set({accessToken, refreshToken: newRefreshToken});
   const nextTweet = await openai.createCompletion("text-davinci-001", {
-    prompt: OPENAI_PROMPTS[Math.floor(Math.random() * OPENAI_PROMPTS.length)],
-    max_tokens: tweetLengths[Math.floor(Math.random() * tweetLengths.length)],
+    prompt: `Generate a tweet with hashtags of 128 characters about ${OPENAI_PROMPTS[Math.floor(Math.random() * OPENAI_PROMPTS.length)]}`,
+    max_tokens: 128,
   });
   const textTweet = nextTweet.data.choices && nextTweet.data.choices[0].text || "";
-  const hashtags = await openai.createCompletion("text-davinci-001", {
-    prompt: `Generate Hastags for the following: \n ${textTweet}`,
-    max_tokens: 64,
-  });
-  const hashtagsTweet = hashtags.data.choices && hashtags.data.choices[0].text || "";
   return await refreshedClient.v2.tweet(
-      `${textTweet} \n ${hashtagsTweet} `
+      textTweet
   );
 });
